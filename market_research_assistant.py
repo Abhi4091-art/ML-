@@ -1,33 +1,58 @@
 import streamlit as st
-from langchain.retrievers import WikipediaRetriever
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.chains import RetrievalQA
+from langchain_community.retrievers import WikipediaRetriever
+from langchain.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 
-st.sidebar.title("Settings")
-llm_options = ["gemini-1.5-flash"]
-llm_choice = st.sidebar.selectbox("Select LLM", llm_options)
-api_key = st.sidebar.text_input("API Key", type="password")
+# Q0: Sidebar with LLM selection and API Key
+st.sidebar.header("Settings")
+api_key = st.sidebar.text_input("Enter your Google API Key", type="password")
+llm_choice = st.sidebar.selectbox("Select LLM", ["gemini-1.5-flash"])
 
 st.title("Market Research Assistant")
-industry = st.text_input("Enter an industry:")
 
-if st.button("Generate Report"):
-    if not industry.strip():
-        st.error("Please provide an industry.")
-    else:
-        # Step 2: Get 5 URLs
-        retriever = WikipediaRetriever()
-        docs = retriever.get_relevant_documents(industry)
-        urls = [doc.metadata['source'] for doc in docs[:5]]
-        st.subheader("Relevant Wikipedia Pages:")
-        for url in urls:
-            st.write(url)
-        
-        # Step 3: Generate report
-        llm = ChatGoogleGenerativeAI(model=llm_choice, api_key=api_key, temperature=0)
-        qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever, chain_type="stuff")
-        query = f"Provide a concise market research report on the {industry} industry, less than 500 words, based on the retrieved information."
-        report = qa_chain.run(query)
-        st.subheader("Industry Report:")
-        st.write(report)
-        st.write(f"Word count: {len(report.split())}")
+# Q1: Get Industry Input
+industry = st.text_input("Enter the industry you want to research:")
+
+if industry and api_key:
+    # Q2: Retrieve 5 relevant Wikipedia pages
+    retriever = WikipediaRetriever(top_k_results=5)
+    docs = retriever.invoke(industry)
+    
+    # Display the retrieved URLs
+    st.subheader("Sources Retrieved:")
+    for doc in docs:
+        st.write(f"- {doc.metadata['source']} (Title: {doc.metadata['title']})")
+    
+    # Prepare the context for the LLM
+    context_text = "\n\n".join([d.page_content for d in docs])
+    
+    # Q3: Generate Report (Standard RAG Pipeline)
+    # This prompt ensures the report is based ONLY on the retrieved text and is <500 words.
+    template = """You are a market research assistant. 
+    Write a report on the industry: {industry}.
+    Base your report ONLY on the following Wikipedia information:
+    {context}
+    
+    The report must be less than 500 words.
+    """
+    prompt = ChatPromptTemplate.from_template(template)
+    
+    # Initialize the LLM
+    llm = ChatGoogleGenerativeAI(model=llm_choice, google_api_key=api_key)
+    output_parser = StrOutputParser()
+    
+    # Create the chain
+    chain = prompt | llm | output_parser
+    
+    st.subheader("Industry Report")
+    with st.spinner("Generating report..."):
+        response = chain.invoke({"industry": industry, "context": context_text})
+        st.write(response)
+
+elif not api_key:
+    st.warning("Please enter your API Key in the sidebar.")
+
+# Q1 Fix: If no industry is provided, ask the user for an update.
+else:
+    st.info("Please enter an industry above to generate a report.")
