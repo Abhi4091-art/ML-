@@ -1,14 +1,16 @@
 import streamlit as st
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.retrievers import WikipediaRetriever
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
 # Q0: Sidebar with LLM selection and API Key
 st.sidebar.header("Settings")
 api_key = st.sidebar.text_input("Enter your Google API Key", type="password")
-llm_choice = st.sidebar.selectbox("Select LLM", ["gemini-1.5-flash"])
-
+llm_choice = st.sidebar.selectbox(
+    "Select LLM",
+    ["gemini-1.5-flash-latest", "gemini-1.5-pro-latest"]
+)
 st.title("Market Research Assistant")
 
 # Q1: Get Industry Input
@@ -56,3 +58,5 @@ elif not api_key:
 # Q1 Fix: If no industry is provided, ask the user for an update.
 else:
     st.info("Please enter an industry above to generate a report.")
+
+
